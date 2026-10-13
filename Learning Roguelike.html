@@ -1,0 +1,762 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Learning Roguelike</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: the run (roll, focus, close out) sits on the left with the rules under it; the campaign board (round, four task cards, log) fills the right column. Phones stack run, board, rules. */
+:root{
+  --bg:#E8ECF2;
+  --panel:#F5F7FB;
+  --raised:#FFFFFF;
+  --ink:#151A3C;
+  --ink-2:#454E6D;
+  --line:#C3CBDA;
+  --line-strong:#8590AA;
+  --pip:#E5A216;
+  --accent:#2A2F8E;
+  --accent-ink:#FFFFFF;
+  --focus:#2A2F8E;
+  --t1:#2D63C8;
+  --t2:#D2493B;
+  --t3:#3A8A2C;
+  --t4:#7048D9;
+  --on-c:#FFFFFF;
+  --font-display:'Silkscreen', ui-monospace, 'Courier New', monospace;
+  --font-body:'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1030;
+    --panel:#161A45;
+    --raised:#1E2358;
+    --ink:#E8EBFC;
+    --ink-2:#A9B0D6;
+    --line:#2D3470;
+    --line-strong:#7983C4;
+    --pip:#F2B63B;
+    --accent:#A3A8FF;
+    --accent-ink:#0D1030;
+    --focus:#C9CCFF;
+    --t1:#78A8FF;
+    --t2:#FF9482;
+    --t3:#8EDB7E;
+    --t4:#BBA7FF;
+    --on-c:#0D1030;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1030;
+  --panel:#161A45;
+  --raised:#1E2358;
+  --ink:#E8EBFC;
+  --ink-2:#A9B0D6;
+  --line:#2D3470;
+  --line-strong:#7983C4;
+  --pip:#F2B63B;
+  --accent:#A3A8FF;
+  --accent-ink:#0D1030;
+  --focus:#C9CCFF;
+  --t1:#78A8FF;
+  --t2:#FF9482;
+  --t3:#8EDB7E;
+  --t4:#BBA7FF;
+  --on-c:#0D1030;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--font-body)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+
+.wrap{max-width:1120px;margin:0 auto;padding-inline:clamp(16px,4vw,32px);padding-block:28px 56px}
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between;align-items:flex-end;margin-bottom:24px}
+h1{font:400 clamp(1.7rem,5.4vw,2.5rem)/1.05 var(--font-display);letter-spacing:.03em;text-transform:uppercase;margin:0 0 8px;text-wrap:balance}
+.sub{margin:0;color:var(--ink-2);max-width:34rem;text-wrap:balance}
+.status{margin:0;font:500 12px var(--font-mono);color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.status::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--line-strong)}
+.status[data-kind="db"]::before,.status[data-kind="local"]::before{background:var(--t3)}
+.status[data-kind="error"]::before{background:var(--t2)}
+.status[data-kind="pending"]::before{background:var(--pip)}
+
+.layout{display:grid;gap:20px;grid-template-columns:minmax(0,1fr);grid-template-areas:"run" "board" "rules";align-items:start}
+@media (min-width:900px){
+  .layout{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);grid-template-areas:"run board" "rules board"}
+}
+.run{grid-area:run}
+.board{grid-area:board;display:grid;gap:20px;min-width:0}
+.rules{grid-area:rules}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0}
+h2{font:600 13px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;margin:0}
+h3{font:600 20px/1.25 var(--font-body);margin:0 0 4px;text-wrap:balance}
+.help{margin:0 0 14px;color:var(--ink-2)}
+.muted{color:var(--ink-2)}
+p{margin:0}
+
+.track{list-style:none;margin:12px 0 22px;padding:0;display:flex;flex-wrap:wrap;gap:6px 16px;font:500 12px var(--font-mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
+.track li{display:flex;align-items:center;gap:7px}
+.track li::before{content:"";width:10px;height:10px;border-radius:2px;border:1.5px solid var(--line-strong)}
+.track li.done::before{background:var(--pip);border-color:var(--pip)}
+.track li.cur{color:var(--ink);font-weight:600}
+.track li.cur::before{background:var(--ink);border-color:var(--ink)}
+
+.dice{display:grid;gap:10px}
+.dice.d4{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dice.d6{grid-template-columns:repeat(3,minmax(0,1fr))}
+.die{cursor:pointer;text-align:left;background:var(--raised);border:1.5px solid var(--line-strong);border-top:6px solid var(--c);border-radius:10px;padding:12px 14px;display:grid;gap:4px;align-content:start;min-height:5.6rem;min-width:0}
+.die:hover:not([disabled]){border-color:var(--ink);border-top-color:var(--c)}
+.die:active:not([disabled]){transform:translateY(1px)}
+.die[disabled]{opacity:.5;cursor:default}
+.die .num{font:400 34px/1 var(--font-display)}
+.die .lab{font-weight:600;overflow-wrap:anywhere;line-height:1.3}
+.die .sub2{font:400 11px var(--font-mono);color:var(--ink-2);letter-spacing:.02em}
+
+.quest{display:grid;gap:2px;border-left:6px solid var(--c);padding:2px 0 2px 14px;margin-bottom:14px}
+.k{font:600 11px var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+.quest .t{font:600 22px/1.25 var(--font-body);overflow-wrap:anywhere}
+.loopbox{background:var(--raised);border:1.5px dashed var(--line-strong);border-radius:10px;padding:12px 14px;margin-bottom:20px;display:grid;gap:6px}
+.loopbox p{overflow-wrap:anywhere}
+
+.clock{font:500 clamp(3.2rem,13vw,4.8rem)/1 var(--font-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin:6px 0 12px}
+.bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-bottom:18px}
+.bar i{display:block;height:100%;background:var(--c);transition:width .25s linear}
+.meta-line{font:500 13px var(--font-mono);color:var(--ink-2);margin-bottom:4px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink-2)}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+
+.btn{cursor:pointer;font-weight:600;font-size:14px;border-radius:8px;padding:10px 18px;min-height:44px;border:1.5px solid var(--line-strong);background:transparent;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.small{min-height:36px;padding:6px 12px;font-size:13px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.link{cursor:pointer;background:none;border:0;padding:8px 0;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px;font-size:14px}
+.link[disabled]{opacity:.5;cursor:not-allowed}
+.reroll{margin-top:10px}
+
+form.closeout{display:grid;gap:16px;margin-top:16px}
+.field{display:grid;gap:6px;min-width:0}
+.field label{font:600 11px var(--font-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);display:flex;gap:10px;justify-content:space-between}
+.field label span{font-weight:500;letter-spacing:.04em}
+.field input[type="text"],.pre{background:var(--raised);border:1.5px solid var(--line-strong);border-radius:8px;padding:10px 12px;width:100%;min-width:0}
+.pre{display:flex;gap:8px;align-items:center;padding:0 12px}
+.pre b{font:600 13px var(--font-mono);color:var(--ink-2)}
+.pre input{border:0;background:transparent;padding:10px 0;width:100%;min-width:0;outline:none}
+.pre:focus-within{outline:3px solid var(--focus);outline-offset:2px}
+.hintline{font-size:13px;color:var(--ink-2)}
+
+.result{border:1.5px solid var(--pip);background:var(--raised);border-radius:10px;padding:14px 16px;display:grid;gap:6px;margin-bottom:20px;animation:stamp .28s ease-out}
+.result h3{font-size:17px}
+@keyframes stamp{from{transform:scale(.97);opacity:.3}to{transform:none;opacity:1}}
+
+.round-head{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.slots{display:flex;gap:8px}
+.slot{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--line-strong);display:grid;place-items:center;font:400 16px var(--font-display);color:var(--ink-2)}
+.slot.on{background:var(--c);border-color:var(--c);color:var(--on-c)}
+.round .meta{display:flex;flex-wrap:wrap;gap:6px 22px;margin:12px 0 14px;font:500 13px var(--font-mono);color:var(--ink-2)}
+.round .meta b{color:var(--ink);font-weight:600}
+
+.four-head{display:grid;gap:6px;margin-bottom:12px}
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,15.5rem),1fr))}
+.card{background:var(--raised);border:1px solid var(--line);border-top:6px solid var(--c);border-radius:10px;padding:14px;display:grid;gap:12px;align-content:start;min-width:0}
+.card-top{display:flex;gap:10px;align-items:flex-end}
+.namefield{flex:1}
+.face{flex:none;width:36px;height:36px;border-radius:8px;background:var(--c);color:var(--on-c);display:grid;place-items:center;font:400 20px var(--font-display)}
+.name{font:600 16px var(--font-body);width:100%;min-width:0;background:var(--panel);border:1.5px solid var(--line-strong);border-radius:8px;padding:8px 10px}
+.marks{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.marks b{font:500 34px/1 var(--font-mono);font-variant-numeric:tabular-nums}
+.depth{font:600 11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;border:1.5px solid var(--line-strong);border-radius:99px;padding:2px 9px}
+.pips{display:flex;flex-wrap:wrap;gap:4px}
+.pips i{width:13px;height:13px;border-radius:3px;border:1.5px solid var(--line-strong)}
+.pips i.on{background:var(--pip);border-color:var(--pip)}
+.next-line{font-size:13px;color:var(--ink-2)}
+.loop{display:grid;gap:2px;font-size:14px;overflow-wrap:anywhere}
+.card-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
+
+.log{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:0}
+.log li{padding:10px 0;border-top:1px solid var(--line);display:grid;gap:2px;min-width:0}
+.log li:first-child{border-top:0}
+.l1{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.when{font:500 12px var(--font-mono);color:var(--ink-2)}
+.tag{font-weight:600;display:inline-flex;gap:7px;align-items:center;overflow-wrap:anywhere}
+.tag::before{content:"";width:10px;height:10px;border-radius:2px;background:var(--c);flex:none}
+.mins{font:500 12px var(--font-mono);color:var(--ink-2)}
+.l2{font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+
+.rules ol{margin:12px 0 0;padding-left:1.3rem;display:grid;gap:10px}
+.rules li::marker{font:600 13px var(--font-mono);color:var(--ink-2)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Learning Roguelike</h1>
+      <p class="sub">Roll for the task. Roll for the time. Stop while you still want more.</p>
+    </div>
+    <p class="status" id="status" role="status" data-kind="loading">Loading your campaign…</p>
+  </header>
+
+  <main class="layout">
+    <section class="panel run" aria-labelledby="run-h">
+      <h2 id="run-h">Current run</h2>
+      <ol class="track" id="track" aria-label="Session steps"></ol>
+      <div id="stage"></div>
+    </section>
+
+    <div class="board" id="board"></div>
+
+    <section class="panel rules" aria-labelledby="rules-h">
+      <h2 id="rules-h">Rules of the run</h2>
+      <ol>
+        <li><strong>Roll the d4.</strong> The number picks your task.</li>
+        <li><strong>Roll the d6.</strong> 1 is 15 minutes, 2 is 20, and so on up to 6 for 40. The blocks are short on purpose, so you stop while you still want more.</li>
+        <li><strong>Read where you left off,</strong> then start the timer.</li>
+        <li><strong>When time is up, stop.</strong> Finish the line you are on and do not start anything new.</li>
+        <li><strong>Write the cliffhanger.</strong> One sentence on the next step. It is required to bank the mark, and it is the first thing you will see the next time this task comes up.</li>
+        <li><strong>One mark per session,</strong> whatever its length. Marks take each task deeper. Touch all four tasks to clear a round and earn a reroll token. A token lets you roll the d4 or d6 again before you start.</li>
+      </ol>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var D6=[15,20,25,30,35,40];
+var FLOORS=[
+  {at:0,name:'Surface'},{at:3,name:'Shallows'},{at:7,name:'Tunnels'},
+  {at:12,name:'Depths'},{at:20,name:'Vault'},{at:30,name:'Core'}
+];
+var DEFAULT_NAMES=['','','',''];
+var PLACEHOLDERS=['e.g. Python practice','e.g. Read a chapter','e.g. Piano scales','e.g. Spanish vocab'];
+var LS_KEY='learning-roguelike-v1';
+
+var $=function(s){return document.querySelector(s)};
+var stageEl=$('#stage'), trackEl=$('#track'), boardEl=$('#board'), statusEl=$('#status');
+
+var state=defaults();
+var ready=false, mode='loading', dbDoc=null;
+var draft={win:'',next:'',spark:''};
+var lastResult=null, armedReset=-1, showAllLog=false, focusNext=false;
+var tickId=null, clockEl=null, barEl=null, audio=null, bankBtn=null;
+var saveTimer=null, saving=false, again=false;
+
+/* ---------- state ---------- */
+function defaults(){
+  return {
+    v:1,
+    tasks:DEFAULT_NAMES.map(function(n){return {name:n,marks:0,next:'',spark:''}}),
+    round:{n:1,done:[false,false,false,false]},
+    tokens:1,
+    reward:'Something small you like',
+    lifetime:0,
+    chime:true,
+    customized:false,
+    log:[],
+    session:null
+  };
+}
+function str(v,max){return typeof v==='string'?v.slice(0,max):''}
+function int(v){var n=Math.floor(Number(v));return isFinite(n)&&n>0?n:0}
+
+function normalize(raw){
+  var s=defaults();
+  if(!raw||typeof raw!=='object') return s;
+  if(Array.isArray(raw.tasks)){
+    s.tasks=s.tasks.map(function(d,i){
+      var r=raw.tasks[i];
+      if(!r||typeof r!=='object') return d;
+      return {name:typeof r.name==='string'?r.name.slice(0,40):d.name,marks:int(r.marks),next:str(r.next,240),spark:str(r.spark,240)};
+    });
+  }
+  if(raw.round&&typeof raw.round==='object'){
+    s.round.n=Math.max(1,int(raw.round.n));
+    if(Array.isArray(raw.round.done)) s.round.done=[0,1,2,3].map(function(i){return raw.round.done[i]===true});
+  }
+  if(raw.tokens!=null) s.tokens=int(raw.tokens);
+  if(typeof raw.reward==='string') s.reward=raw.reward.slice(0,80);
+  s.lifetime=int(raw.lifetime);
+  if(typeof raw.chime==='boolean') s.chime=raw.chime;
+  s.customized=raw.customized===true;
+  if(Array.isArray(raw.log)){
+    s.log=raw.log.slice(0,150).filter(function(e){return e&&typeof e==='object'}).map(function(e){
+      return {t:Number(e.t)||0,slot:Math.min(3,int(e.slot)),task:str(e.task,40),min:int(e.min),ran:int(e.ran),win:str(e.win,240),next:str(e.next,240),spark:str(e.spark,240)};
+    });
+  }
+  var r=raw.session;
+  if(r&&typeof r==='object'){
+    var slot=int(r.slot), phase=r.phase;
+    if(slot<=3){
+      if(phase==='d6'){ s.session={slot:slot,phase:'d6'}; }
+      else if(['ready','running','paused','closeout'].indexOf(phase)>=0){
+        var d=int(r.d6);
+        if(d>=1&&d<=6){
+          var min=D6[d-1], total=min*60000, ses={slot:slot,d6:d,min:min,phase:phase};
+          if(phase==='running'){ if(isFinite(r.endAt)) ses.endAt=r.endAt; else ses.phase='ready'; }
+          if(phase==='paused') ses.remainMs=isFinite(r.remainMs)?Math.max(0,Math.min(total,r.remainMs)):total;
+          if(phase==='closeout') ses.ranMs=isFinite(r.ranMs)?Math.max(0,Math.min(total,r.ranMs)):total;
+          s.session=ses;
+        }
+      }
+    }
+  }
+  return s;
+}
+
+function taskName(i){var n=(state.tasks[i].name||'').trim();return n||('Task '+(i+1))}
+function depthIndex(m){var k=0;for(var i=0;i<FLOORS.length;i++){if(m>=FLOORS[i].at)k=i}return k}
+function plural(n,a,b){return n===1?a:b}
+function fmtClock(ms){
+  var sec=Math.ceil(ms/1000), mm=Math.floor(sec/60), ss=sec%60;
+  return (mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+}
+function fmtDate(t){try{return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'})}catch(e){return ''}}
+
+/* ---------- tiny DOM helper ---------- */
+function h(tag,attrs){
+  var el=document.createElement(tag), kids=Array.prototype.slice.call(arguments,2);
+  if(attrs){
+    Object.keys(attrs).forEach(function(k){
+      var v=attrs[k];
+      if(v==null||v===false) return;
+      if(k==='class') el.className=v;
+      else if(k==='style') el.style.cssText=v;
+      else if(k.slice(0,2)==='on') el.addEventListener(k.slice(2),v);
+      else if(v===true) el.setAttribute(k,'');
+      else el.setAttribute(k,v);
+    });
+  }
+  kids.reduce(function(a,b){return a.concat(b)},[]).forEach(function(kid){
+    if(kid==null||kid===false) return;
+    el.append(kid&&kid.nodeType?kid:document.createTextNode(String(kid)));
+  });
+  return el;
+}
+function colorVar(i){return '--c:var(--t'+(i+1)+')'}
+
+/* ---------- saving ---------- */
+function setStatus(kind){
+  var map={
+    loading:'Loading your campaign…',
+    pending:'Saving…',
+    db:'Saved',
+    local:'Saved in this browser only',
+    error:'Could not save yet. Will retry on your next change.'
+  };
+  statusEl.textContent=map[kind]||'';
+  statusEl.setAttribute('data-kind',kind);
+}
+function lsRead(){try{var r=localStorage.getItem(LS_KEY);return r?JSON.parse(r):null}catch(e){return null}}
+function lsWrite(o){try{localStorage.setItem(LS_KEY,JSON.stringify(o));return true}catch(e){return false}}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+
+function touch(){
+  if(!ready) return;
+  setStatus('pending');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(flush,450);
+}
+async function flush(){
+  saveTimer=null;
+  if(saving){again=true;return}
+  saving=true;
+  try{
+    var body=JSON.parse(JSON.stringify(state));
+    if(mode==='db'){
+      var ok=false;
+      for(var attempt=0;attempt<2&&!ok;attempt++){
+        try{ await dbDoc.set(body); ok=true; setStatus('db'); }
+        catch(e){
+          var c=e&&e.code;
+          if(c==='unavailable'||c==='resource_exhausted'){ if(attempt===0) await sleep(600+Math.random()*400); }
+          else { mode='local'; setStatus(lsWrite(body)?'local':'error'); ok=true; }
+        }
+      }
+      if(!ok) setStatus('error');
+    }else{
+      setStatus(lsWrite(body)?'local':'error');
+    }
+  }finally{
+    saving=false;
+    if(again){again=false;touch()}
+  }
+}
+
+/* ---------- timer ---------- */
+function remaining(s){
+  var total=s.min*60000;
+  if(s.phase==='running') return Math.max(0,s.endAt-Date.now());
+  if(s.phase==='paused') return s.remainMs;
+  return total;
+}
+function startTick(){if(!tickId) tickId=setInterval(tick,250)}
+function stopTick(){if(tickId){clearInterval(tickId);tickId=null}}
+function paintClock(left,total){
+  if(clockEl) clockEl.textContent=fmtClock(left);
+  if(barEl) barEl.style.width=((total-left)/total*100).toFixed(1)+'%';
+}
+function tick(){
+  var s=state.session;
+  if(!s||s.phase!=='running'){stopTick();return}
+  var left=s.endAt-Date.now();
+  if(left<=0){
+    s.phase='closeout'; s.ranMs=s.min*60000; delete s.endAt;
+    stopTick(); chime(); focusNext=true; touch(); renderRun();
+    return;
+  }
+  paintClock(left,s.min*60000);
+}
+function ensureAudio(){
+  if(audio||!state.chime) return;
+  try{
+    var C=window.AudioContext||window.webkitAudioContext;
+    if(C){audio=new C(); if(audio.state==='suspended') audio.resume();}
+  }catch(e){audio=null}
+}
+function chime(){
+  if(!state.chime||!audio) return;
+  try{
+    var t=audio.currentTime;
+    [[660,0],[880,0.22],[1100,0.44]].forEach(function(p){
+      var o=audio.createOscillator(), g=audio.createGain();
+      o.type='sine'; o.frequency.value=p[0];
+      g.gain.setValueAtTime(0.0001,t+p[1]);
+      g.gain.linearRampToValueAtTime(0.18,t+p[1]+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+p[1]+0.35);
+      o.connect(g); g.connect(audio.destination);
+      o.start(t+p[1]); o.stop(t+p[1]+0.4);
+    });
+  }catch(e){}
+}
+
+/* ---------- actions ---------- */
+function pickD4(n){
+  if(!ready||state.session) return;
+  state.session={slot:n-1,phase:'d6'}; lastResult=null; armedReset=-1;
+  touch(); renderRun();
+}
+function pickD6(n){
+  var s=state.session; if(!ready||!s||s.phase!=='d6') return;
+  s.d6=n; s.min=D6[n-1]; s.phase='ready';
+  touch(); renderRun();
+}
+function rerollD4(){
+  if(!ready||state.tokens<1||!state.session) return;
+  state.tokens-=1; state.session=null; touch(); renderRun(); renderBoard();
+}
+function rerollD6(){
+  var s=state.session; if(!ready||state.tokens<1||!s||s.phase!=='ready') return;
+  state.tokens-=1; state.session={slot:s.slot,phase:'d6'}; touch(); renderRun(); renderBoard();
+}
+function startTimer(){
+  var s=state.session; if(!ready||!s||(s.phase!=='ready'&&s.phase!=='paused')) return;
+  ensureAudio();
+  var left=s.remainMs!=null?s.remainMs:s.min*60000;
+  s.endAt=Date.now()+left; delete s.remainMs; s.phase='running';
+  touch(); renderRun();
+}
+function pauseTimer(){
+  var s=state.session; if(!s||s.phase!=='running') return;
+  s.remainMs=Math.max(0,s.endAt-Date.now()); delete s.endAt; s.phase='paused';
+  stopTick(); touch(); renderRun();
+}
+function wrapUp(){
+  var s=state.session; if(!s||(s.phase!=='running'&&s.phase!=='paused'&&s.phase!=='ready')) return;
+  var total=s.min*60000;
+  s.ranMs=Math.max(0,total-remaining(s));
+  delete s.endAt; delete s.remainMs; s.phase='closeout';
+  stopTick(); focusNext=true; touch(); renderRun();
+}
+function bank(){
+  var s=state.session; if(!ready||!s||s.phase!=='closeout') return;
+  var next=draft.next.trim(); if(next.length<3) return;
+  var t=state.tasks[s.slot], before=depthIndex(t.marks);
+  t.marks+=1; state.lifetime+=1;
+  t.next=next.slice(0,240); t.spark=draft.spark.trim().slice(0,240);
+  state.log.unshift({t:Date.now(),slot:s.slot,task:taskName(s.slot).slice(0,40),min:s.min,ran:Math.round((s.ranMs||0)/60000),win:draft.win.trim().slice(0,240),next:t.next,spark:t.spark});
+  if(state.log.length>150) state.log.length=150;
+  var after=depthIndex(t.marks);
+  state.round.done[s.slot]=true;
+  var cleared=state.round.done.every(Boolean), clearedN=state.round.n;
+  if(cleared){state.tokens+=1; state.round.n+=1; state.round.done=[false,false,false,false]}
+  var touched=state.round.done.filter(Boolean).length;
+  var waiting=state.tasks.filter(function(x,i){return i!==s.slot&&x.next}).length;
+  lastResult={task:taskName(s.slot),marks:t.marks,depthUp:after>before?FLOORS[after].name:'',cleared:cleared,clearedN:clearedN,touched:touched,waiting:waiting,reward:state.reward.trim()};
+  state.session=null; draft={win:'',next:'',spark:''};
+  touch(); renderRun(); renderBoard();
+}
+function resetTask(i){
+  var t=state.tasks[i];
+  t.name=''; t.marks=0; t.next=''; t.spark=''; state.round.done[i]=false; armedReset=-1;
+  state.customized=true;
+  touch(); renderRun(); renderBoard();
+  var el=$('#name-'+i);
+  if(el){el.scrollIntoView({block:'nearest'}); el.focus();}
+}
+
+/* ---------- run panel ---------- */
+function btn(label,cls,fn,disabled){
+  return h('button',{type:'button',class:'btn '+(cls||''),onclick:fn,disabled:disabled||!ready},label);
+}
+function dieBtn(o){
+  return h('button',{type:'button',class:'die',style:colorVar(o.c),'aria-label':o.aria,disabled:!ready,onclick:o.on},
+    h('span',{class:'num'},String(o.n)),
+    h('span',{class:'lab'},o.label),
+    o.sub?h('span',{class:'sub2'},o.sub):null);
+}
+function questBanner(i){
+  return h('div',{class:'quest',style:colorVar(i)},
+    h('span',{class:'k'},'Your task, d4 face '+(i+1)),
+    h('span',{class:'t'},taskName(i)));
+}
+function loopBox(i){
+  var t=state.tasks[i];
+  return h('div',{class:'loopbox'},
+    h('span',{class:'k'},'Where you left off'),
+    t.next?h('p',null,h('strong',null,'Next: '),t.next):h('p',{class:'muted'},'Fresh start. Pick any small first step and begin.'),
+    t.spark?h('p',{class:'muted'},h('strong',null,'You wondered: '),t.spark):null);
+}
+function rerollBtn(label,fn){
+  return h('button',{type:'button',class:'link reroll',disabled:!ready||state.tokens<1,onclick:fn},
+    label+' (costs 1 token, '+state.tokens+' left)');
+}
+function resultCard(){
+  var r=lastResult, lines=[];
+  lines.push(h('p',null,r.task+' now has '+r.marks+' '+plural(r.marks,'mark','marks')+'.'+(r.depthUp?' New depth reached: '+r.depthUp+'.':'')));
+  lines.push(r.cleared
+    ?h('p',null,'Round '+r.clearedN+' cleared. You earned a reroll token. Your reward: '+(r.reward||'a real break')+'.')
+    :h('p',null,r.touched+' of 4 tasks touched this round.'));
+  lines.push(h('p',{class:'muted'},r.waiting>0
+    ?r.waiting+' '+plural(r.waiting,'cliffhanger is','cliffhangers are')+' waiting on the other tasks. Roll the d4 when you want the next one.'
+    :'Roll the d4 when you are ready for the next one.'));
+  return h('div',{class:'result',role:'status'},h('h3',null,'Mark banked'),lines);
+}
+
+function stageD4(){
+  var out=[];
+  if(lastResult) out.push(resultCard());
+  out.push(h('h3',null,'Roll the d4'));
+  out.push(h('p',{class:'help'},'Tap the number you rolled. It picks your task. Keys 1 to 4 work too.'));
+  out.push(h('div',{class:'dice d4'},state.tasks.map(function(t,i){
+    var f=FLOORS[depthIndex(t.marks)].name;
+    return dieBtn({n:i+1,label:taskName(i),sub:f+' · '+t.marks+' '+plural(t.marks,'mark','marks'),c:i,aria:'Rolled '+(i+1)+', '+taskName(i),on:function(){pickD4(i+1)}});
+  })));
+  out.push(h('button',{type:'button',class:'link reroll',disabled:!ready,onclick:function(){
+    var el=$('#name-0'); if(el){el.scrollIntoView({block:'center'}); el.focus({preventScroll:true});}
+  }},'Rename or swap tasks'));
+  return out;
+}
+function stageD6(s){
+  var i=s.slot;
+  return [
+    questBanner(i), loopBox(i),
+    h('h3',null,'Roll the d6'),
+    h('p',{class:'help'},'Tap the number you rolled. It sets your minutes. Keys 1 to 6 work too.'),
+    h('div',{class:'dice d6'},D6.map(function(m,k){
+      return dieBtn({n:k+1,label:m+' min',c:i,aria:'Rolled '+(k+1)+', '+m+' minutes',on:function(){pickD6(k+1)}});
+    })),
+    rerollBtn('Reroll the d4',rerollD4)
+  ];
+}
+function stageFocus(s){
+  var i=s.slot, total=s.min*60000, left=remaining(s);
+  var clock=h('div',{class:'clock',role:'timer','aria-live':'off'},fmtClock(left));
+  var fill=h('i',{style:'width:'+((total-left)/total*100).toFixed(1)+'%'});
+  clockEl=clock; barEl=fill;
+  var controls=[];
+  if(s.phase==='ready') controls.push(btn('Start timer','primary',startTimer));
+  if(s.phase==='running'){controls.push(btn('Pause','',pauseTimer)); controls.push(btn('Wrap up now','',wrapUp));}
+  if(s.phase==='paused'){controls.push(btn('Resume','primary',startTimer)); controls.push(btn('Wrap up now','',wrapUp));}
+  var out=[
+    questBanner(i), loopBox(i),
+    h('p',{class:'meta-line'},s.min+' minute session, d6 rolled '+s.d6),
+    clock,
+    h('div',{class:'bar',style:colorVar(i),role:'img','aria-label':'Session progress'},fill),
+    h('div',{class:'controls'},controls),
+    h('label',{class:'check'},
+      h('input',{type:'checkbox',checked:state.chime,onchange:function(e){state.chime=e.target.checked;touch()}}),
+      'Chime when time is up')
+  ];
+  if(s.phase==='ready') out.push(rerollBtn('Reroll the d6',rerollD6));
+  return out;
+}
+function stageClose(s){
+  var i=s.slot, total=s.min*60000, full=(s.ranMs||0)>=total;
+  var ran=Math.round((s.ranMs||0)/60000);
+  var nextInput=h('input',{id:'f-next',type:'text',maxlength:'240',value:draft.next,autocomplete:'off',placeholder:'the very next step, in one sentence',
+    oninput:function(e){draft.next=e.target.value;syncBank()}});
+  bankBtn=h('button',{type:'submit',class:'btn primary',disabled:true},'Bank the mark');
+  var form=h('form',{class:'closeout',onsubmit:function(e){e.preventDefault();bank()}},
+    h('div',{class:'field'},
+      h('label',{for:'f-win'},'Win',h('span',null,'Optional')),
+      h('input',{id:'f-win',type:'text',maxlength:'240',value:draft.win,autocomplete:'off',placeholder:'One thing you finished or understood',
+        oninput:function(e){draft.win=e.target.value}})),
+    h('div',{class:'field'},
+      h('label',{for:'f-next'},'Cliffhanger',h('span',null,'Required')),
+      h('div',{class:'pre'},h('b',null,'Next:'),nextInput)),
+    h('div',{class:'field'},
+      h('label',{for:'f-spark'},'Spark',h('span',null,'Optional')),
+      h('input',{id:'f-spark',type:'text',maxlength:'240',value:draft.spark,autocomplete:'off',placeholder:'A question you now want answered',
+        oninput:function(e){draft.spark=e.target.value}})),
+    h('div',null,bankBtn),
+    h('p',{class:'hintline',id:'bank-hint'},'Write the cliffhanger to bank the mark. It becomes the first thing you see next time this task comes up.'));
+  syncBank();
+  return [
+    questBanner(i),
+    h('h3',null,full?'Time. Stop here.':'Wrapping up.'),
+    h('p',{class:'help'},(full?s.min+' minutes done. ':'Stopped at '+ran+' of '+s.min+' minutes. ')+'Finish the line you are on and do not start anything new. The unfinished part is what makes the next roll easy to begin.'),
+    form
+  ];
+}
+function syncBank(){if(bankBtn) bankBtn.disabled=!ready||draft.next.trim().length<3}
+
+function renderRun(){
+  var s=state.session;
+  clockEl=null; barEl=null; bankBtn=null;
+  var idx=!s?0:s.phase==='d6'?1:s.phase==='closeout'?3:2;
+  trackEl.replaceChildren.apply(trackEl,['Roll d4','Roll d6','Focus','Close out'].map(function(l,i){
+    return h('li',{class:i<idx?'done':i===idx?'cur':null,'aria-current':i===idx?'step':null},l);
+  }));
+  var nodes=!s?stageD4():s.phase==='d6'?stageD6(s):s.phase==='closeout'?stageClose(s):stageFocus(s);
+  stageEl.replaceChildren.apply(stageEl,nodes);
+  if(s&&s.phase==='running') startTick(); else stopTick();
+  if(focusNext){focusNext=false;var el=$('#f-next');if(el)el.focus()}
+}
+
+/* ---------- board ---------- */
+function roundBlock(){
+  var slots=h('div',{class:'slots',role:'list'},state.tasks.map(function(t,i){
+    var on=state.round.done[i];
+    return h('span',{class:'slot'+(on?' on':''),role:'listitem',style:colorVar(i),'aria-label':taskName(i)+(on?', done this round':', not yet this round')},String(i+1));
+  }));
+  return h('section',{class:'panel round','aria-labelledby':'round-h'},
+    h('div',{class:'round-head'},h('h2',{id:'round-h'},'Round '+state.round.n),slots),
+    h('p',{class:'muted'},'Touch all four tasks once to clear the round. Clearing it earns a reroll token and the reward below.'),
+    h('div',{class:'meta'},
+      h('span',null,'Reroll tokens ',h('b',null,String(state.tokens))),
+      h('span',null,'Marks banked ',h('b',null,String(state.lifetime)))),
+    h('div',{class:'field'},
+      h('label',{for:'reward'},'Round reward'),
+      h('input',{id:'reward',type:'text',maxlength:'80',value:state.reward,autocomplete:'off',placeholder:'Something small you like',disabled:!ready,
+        oninput:function(e){state.reward=e.target.value;touch()}})));
+}
+function cardFor(i){
+  var t=state.tasks[i], di=depthIndex(t.marks), f=FLOORS[di], nx=FLOORS[di+1];
+  var pips=null, note;
+  if(nx){
+    var span=nx.at-f.at, filled=t.marks-f.at, arr=[];
+    for(var k=0;k<span;k++) arr.push(h('i',{class:k<filled?'on':null}));
+    pips=h('div',{class:'pips',role:'img','aria-label':filled+' of '+span+' marks toward '+nx.name},arr);
+    var more=nx.at-t.marks;
+    note=more+' more '+plural(more,'mark','marks')+' to '+nx.name+'.';
+  }else note='Deepest depth reached. Marks keep counting.';
+  var armed=armedReset===i, actions=[];
+  if(armed){
+    actions.push(h('span',{class:'muted'},'Clear the name, marks, cliffhanger and spark for a fresh task?'));
+    actions.push(h('button',{type:'button',class:'btn small',onclick:function(){resetTask(i)}},'Yes, swap'));
+    actions.push(h('button',{type:'button',class:'btn small',onclick:function(){armedReset=-1;renderBoard()}},'Keep'));
+  }else if(t.name||t.marks>0||t.next){
+    actions.push(h('button',{type:'button',class:'link',onclick:function(){armedReset=i;renderBoard()}},'Swap in a new task'));
+  }
+  return h('article',{class:'card',style:colorVar(i)},
+    h('div',{class:'card-top'},
+      h('span',{class:'face','aria-hidden':'true'},String(i+1)),
+      h('div',{class:'field namefield'},
+        h('label',{for:'name-'+i},'Task name'),
+        h('input',{id:'name-'+i,class:'name',type:'text',maxlength:'40',value:t.name,autocomplete:'off',placeholder:PLACEHOLDERS[i],disabled:!ready,
+          oninput:function(e){
+            t.name=e.target.value;
+            if(!state.customized){state.customized=true;var hn=$('#hint');if(hn)hn.hidden=true}
+            touch(); renderRun();
+          }}))),
+    h('div',{class:'marks'},h('b',null,String(t.marks)),h('span',{class:'depth'},f.name),h('span',{class:'muted'},plural(t.marks,'mark','marks'))),
+    pips,
+    h('p',{class:'next-line'},note),
+    h('div',{class:'loop'},h('span',{class:'k'},'Next'),h('span',{class:t.next?null:'muted'},t.next||'No cliffhanger yet. Your first session sets one.')),
+    t.spark?h('div',{class:'loop'},h('span',{class:'k'},'Wondering'),h('span',null,t.spark)):null,
+    actions.length?h('div',{class:'card-actions'},actions):null);
+}
+function cardsBlock(){
+  return h('section',{'aria-labelledby':'four-h'},
+    h('div',{class:'four-head'},
+      h('h2',{id:'four-h'},'Your four'),
+      h('p',{class:'muted',id:'hint',hidden:state.customized},'Name your four tasks. Anything works: a subject, a project, a chore, a habit. Renaming keeps a slot’s marks. Swap in a new task to start a slot from zero.')),
+    h('div',{class:'cards'},[0,1,2,3].map(cardFor)));
+}
+function logBlock(){
+  var list=showAllLog?state.log:state.log.slice(0,6);
+  var items=list.map(function(e){
+    var early=e.ran>0&&e.ran<e.min;
+    return h('li',{style:colorVar(e.slot)},
+      h('div',{class:'l1'},
+        h('span',{class:'when'},fmtDate(e.t)),
+        h('span',{class:'tag'},e.task||('Task '+(e.slot+1))),
+        h('span',{class:'mins'},e.min+' min'+(early?', stopped at '+e.ran:''))),
+      e.win?h('p',{class:'l2'},e.win):null);
+  });
+  return h('section',{class:'panel','aria-labelledby':'log-h'},
+    h('h2',{id:'log-h'},'Recent sessions'),
+    items.length?h('ul',{class:'log'},items):h('p',{class:'muted',style:'margin-top:12px'},'Banked sessions show up here. Your first mark starts the log.'),
+    state.log.length>6?h('button',{type:'button',class:'link',onclick:function(){showAllLog=!showAllLog;renderBoard()}},showAllLog?'Show fewer':'Show all '+state.log.length):null);
+}
+function renderBoard(){
+  boardEl.replaceChildren(roundBlock(),cardsBlock(),logBlock());
+}
+
+/* ---------- boot ---------- */
+document.addEventListener('keydown',function(e){
+  if(!ready||e.metaKey||e.ctrlKey||e.altKey) return;
+  var tag=((e.target&&e.target.tagName)||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||tag==='select') return;
+  var n=parseInt(e.key,10); if(!n) return;
+  var s=state.session;
+  if(!s&&n>=1&&n<=4) pickD4(n);
+  else if(s&&s.phase==='d6'&&n>=1&&n<=6) pickD6(n);
+});
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden){var s=state.session;if(s&&s.phase==='running') tick();}
+  else if(saveTimer){clearTimeout(saveTimer);flush();}
+});
+window.addEventListener('pagehide',function(){if(saveTimer){clearTimeout(saveTimer);flush();}});
+
+async function init(){
+  renderRun(); renderBoard();
+  var db=null;
+  try{
+    var canUse=window.claude&&typeof window.claude.use==='function';
+    db=await Promise.race([canUse?window.claude.use('db'):Promise.resolve(null),sleep(4000).then(function(){return null})]);
+  }catch(e){db=null}
+  if(db){
+    dbDoc=db.doc('campaign/main');
+    var snap=null;
+    for(var a=0;a<2&&!snap;a++){
+      try{snap=await dbDoc.get()}catch(e){if(a===0)await sleep(600)}
+    }
+    if(snap){
+      mode='db';
+      state=normalize(snap.exists?JSON.parse(JSON.stringify(snap.data())):null);
+    }
+  }
+  if(mode!=='db'){
+    mode='local';
+    state=normalize(lsRead());
+  }
+  ready=true;
+  var s=state.session;
+  if(s&&s.phase==='running'&&s.endAt<=Date.now()){
+    s.phase='closeout'; s.ranMs=s.min*60000; delete s.endAt; touch();
+  }
+  setStatus(mode==='db'?'db':'local');
+  renderRun(); renderBoard();
+}
+init();
+})();
+</script>
+
+</body></html>
